@@ -31,7 +31,7 @@ class Interpreter(object):
         # client string input, e.g. "3+5"
         self.text = text
         # self.pos is an index into self.text
-        self.pos = 1
+        self.pos = 0
         # current token instance
         self.current_token = None
 
