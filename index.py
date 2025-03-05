@@ -104,7 +104,7 @@ class Interpreter(object):
         #     self.pos += 1
         #     return Token(PLUS, current_char)
 
-        self.error()
+        # self.error()
 
     def skip_whitespace(self):
         while self.current_char is not None and self.current_char.isspace():
@@ -128,6 +128,12 @@ class Interpreter(object):
         else:
             self.error()
 
+    def term(self):
+        """Return an INTEGER token value"""
+        token =self.current_token
+        self.eat(INTEGER)
+        return token.value
+
     def expr(self):
         """expr -> INTEGER PLUS INTEGER"""
         """Parser / Interpreter
@@ -136,32 +142,43 @@ class Interpreter(object):
         """
         # set current token to the first token taken from the input
         self.current_token = self.get_next_token()
+
+        result = self.term()
+        while self.current_token.type in (PLUS, MINUS):
+            token = self.current_token
+            if token.type == PLUS:
+                self.eat(PLUS)
+                result = result + self.term()
+            elif token.type == MINUS:
+                self.eat(MINUS)
+                result = result - self.term()
+        return result
         # expect the current token to be a single-digit integer
-        left = self.current_token
-        self.eat(INTEGER)
+        # left = self.current_token
+        # self.eat(INTEGER)
 
         # expect the current token to be a '+' token
-        op = self.current_token
-        if op.type == PLUS:
-            self.eat(PLUS)
-        else:
-            self.eat(MINUS)
+        # op = self.current_token
+        # if op.type == PLUS:
+        #     self.eat(PLUS)
+        # else:
+        #     self.eat(MINUS)
 
-        # expect the current token to be a single-digit integer
-        right = self.current_token
-        self.eat(INTEGER)
-        # after the above call the self.current_token is set to
+        # # expect the current token to be a single-digit integer
+        # right = self.current_token
+        # self.eat(INTEGER)
+        # # after the above call the self.current_token is set to
         # EOF token
 
         # at this point INTEGER PLUS INTEGER sequence of tokens
         # has been successfully found and the method can just
         # return the result of adding two integers, thus
         # effectively interpreting client input
-        if op.type == PLUS:
-            result = left.value + right.value
-        else:
-            result = left.value - right.value
-        return result
+        # if op.type == PLUS:
+        #     result = left.value + right.value
+        # else:
+        #     result = left.value - right.value
+        # return result
 
 def main():
     while True:
