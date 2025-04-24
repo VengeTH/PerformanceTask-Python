@@ -101,7 +101,7 @@ class Lexer(object):
 
         return Token(EOF, None)
 
-class Interpreter(object):
+class Parser(object):
     def __init__(self, lexer):
         # client string input, e.g. "3+5"
         self.lexer = lexer
@@ -115,29 +115,29 @@ class Interpreter(object):
 
     def term(self):
         """term : factor ((MUL | DIV) factor)*"""
-        result = self.factor()
+        node = self.factor()
 
         while self.current_token.type in (MUL, DIV):
             token = self.current_token
             if token.type == MUL:
                 self.eat(MUL)
-                result = result * self.factor()
             elif token.type == DIV:
                 self.eat(DIV)
-                result = result // self.factor()
-        return result
+
+            node = BinOp(left=node, op=token, right=self.factor())
+        return node
 
     def factor(self):
         """Return an INTEGER token value"""
         token = self.current_token
         if token.type == INTEGER:
             self.eat(INTEGER)
-            return token.value
+            return Num(token)
         elif token.type == LPAREN:
             self.eat(LPAREN)
-            result = self.expr()
+            node = self.expr()
             self.eat(RPAREN)
-            return result
+            return node
 
     # def advance(self):
     #     """Advance the 'pos' pointer and set 'current_char' variable."""
@@ -242,17 +242,20 @@ class Interpreter(object):
         term   : factor ((MUL | DIV) factor)*
         factor : INTEGER
         """
-        result = self.term()
+        node = self.term()
 
         while self.current_token.type in (PLUS, MINUS):
             token = self.current_token
             if token.type == PLUS:
                 self.eat(PLUS)
-                result = result + self.term()
             elif token.type == MINUS:
                 self.eat(MINUS)
-                result = result - self.term()
-        return result
+
+            node = BinOp(left=node, op=token, right=self.term())
+        return node
+
+    def parse(self):
+        return self.expr()
         # set current token to the first token taken from the input
         # self.current_token = self.get_next_token()
 
@@ -293,19 +296,67 @@ class Interpreter(object):
         #     result = left.value - right.value
         # return result
 
+class AST(object):
+    pass
+
+class BinOp(AST):
+    def __init__(self, left, op, right):
+        self.left = left
+        self.token = self.op = op
+        self.right = right
+
+class Num(AST):
+    def __init__(self, token):
+        self.token = token
+        self.value = token.value
+
+class NodeVisitor(object):
+    def visit(self, node):
+        method_name = 'visit_' + type(node).__name__
+        visitor = getattr(self, method_name, self.generic_visit)
+        return visitor(node)
+
+    def generic_visit(self, node):
+        raise Exception('No visit_{} method'.format(type(node).__name__))
+
+class Interpreter(NodeVisitor):
+    def __init__(self, parser):
+        self.parser = parser
+
+    def visit_BinOp(self, node):
+        if node.op.type == PLUS:
+            return self.visit(node.left) + self.visit(node.right)
+        elif node.op.type == MINUS:
+            return self.visit(node.left) - self.visit(node.right)
+        elif node.op.type == MUL:
+            return self.visit(node.left) * self.visit(node.right)
+        elif node.op.type == DIV:
+            return self.visit(node.left) // self.visit(node.right)
+
+    def visit_Num(self, node):
+        return node.value
+
+    def interpret(self):
+        tree = self.parser.parse()
+        return self.visit(tree)
+
 def main():
     while True:
         try:
+            try:
+                text = raw_input('spi> ')
+            except NameError:
+                text = input('spi> ')
             # To run under Python3 replace 'raw_input' call
             # with 'input'
-            text = input('calc> ')
         except EOFError:
             break
         if not text:
             continue
         lexer = Lexer(text)
-        interpreter = Interpreter(lexer)
-        result = interpreter.expr()
+        parser = Parser(lexer)
+        interpreter = Interpreter(parser)
+        result = interpreter.interpret()
         print(result)
 
 if __name__ == '__main__':
