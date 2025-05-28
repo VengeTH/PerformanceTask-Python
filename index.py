@@ -1,3 +1,4 @@
+from collections import OrderedDict
 #Token types
 #
 #EOF (end-of-file) token is used to indicate that
@@ -370,13 +371,9 @@ class Parser(object):
     #         if self.current_char.isdigit():
     #             return Token(INTEGER, self.integer())
 
-    #         if self.current_char == '*':
-    #             self.advance()
-    #             return Token(MUL, '*')
-
-    #         if self.current_char == '/':
-    #             self.advance()
-    #             return Token(DIV, '/')
+    #         if current_char == '+':
+    #             self.pos += 1
+    #             return Token(PLUS, current_char)
 
     #         self.error()
 
@@ -544,8 +541,8 @@ class NodeVisitor(object):
         pass
 
 class Interpreter(NodeVisitor):
-    def __init__(self, parser):
-        self.parser = parser
+    def __init__(self, tree):  # Changed: accept tree instead of parser
+        self.tree = tree
         self.GLOBAL_SCOPE = {}
 
     def visit_BinOp(self, node):
@@ -564,7 +561,7 @@ class Interpreter(NodeVisitor):
         return node.value
 
     def interpret(self):
-        tree = self.parser.parse()
+        tree = self.tree  # Use the tree passed to constructor
         return self.visit(tree)
 
     def visit_UnaryOp(self, node):
@@ -580,7 +577,7 @@ class Interpreter(NodeVisitor):
 
     def visit_Assign(self, node):
         var_name = node.left.value
-        self.GLOBAL_SCOPE[var_name] = self.visit(node.right)
+        self.GLOBAL_SCOPE[var_name] = self.visit(node.right)  # Actually store the value
 
     def visit_Var(self, node):
         var_name = node.value
@@ -591,6 +588,20 @@ class Interpreter(NodeVisitor):
             return val
 
     def visit_NoOp(self, node):
+        pass
+
+    def visit_Program(self, node):
+        self.visit(node.block)
+
+    def visit_Block(self, node):
+        for declaration in node.declarations:
+            self.visit(declaration)
+        self.visit(node.compound_statement)
+
+    def visit_VarDecl(self, node):
+        pass
+
+    def visit_Type(self, node):
         pass
 
 class UnaryOp(AST):
@@ -636,24 +647,126 @@ class Type(AST):
         self.token = token
         self.value = token.value
 
+class Symbol(object):
+    def __init__(self, name, type=None):
+        self.name = name
+        self.type = type
+
+class BuiltinTypeSymbol(Symbol):
+    def __init__(self, name):
+        super().__init__(name)
+    def __str__(self):
+        return self.name
+
+    __repr__ = __str__
+
+class VarSymbol(Symbol):
+    def __init__(self, name, type):
+        super().__init__(name, type)
+
+    def __str__(self):
+        return '<{name}:{type}>'.format(name=self.name, type=self.type)
+
+    __repr__ = __str__
+
+class SymbolTable(object):
+    def __init__(self):
+        self._symbols = OrderedDict()
+        self._init_builtins()
+
+    def _init_builtins(self):
+        self.define(BuiltinTypeSymbol('INTEGER'))
+        self.define(BuiltinTypeSymbol('REAL'))
+
+    def __str__(self):
+        s = 'Symbols: {symbols}'.format(
+            symbols=[value for value in self._symbols.values()]
+        )
+        return s
+
+    __repr__ = __str__
+
+    def define(self, symbol):
+        print('Define: %s' % symbol)
+        self._symbols[symbol.name] = symbol
+
+    def lookup(self, name):
+        print('Lookup: %s' % name)
+        symbol = self._symbols.get(name)
+        return symbol
+
+class SymbolTableBuilder(NodeVisitor):
+    def __init__(self):
+        self.symtab = SymbolTable()
+
+    def visit_Assign(self, node):
+        self.visit(node.left)
+        self.visit(node.right)
+
+
+    def visit_Var(self, node):
+        var_name = node.value
+        var_symbol = self.symtab.lookup(var_name)
+
+        if var_symbol is None:
+            raise NameError(repr(var_name))
+
+    def visit_Block(self, node):
+        for declaration in node.declarations:
+            self.visit(declaration)
+        self.visit(node.compound_statement)
+
+    def visit_Program(self, node):
+        self.visit(node.block)
+
+    def visit_BinOp(self, node):
+        self.visit(node.left)
+        self.visit(node.right)
+
+    def visit_Num(self, node):
+        pass
+
+    def visit_UnaryOp(self, node):
+        self.visit(node.expr)
+
+    def visit_Compound(self, node):
+        for child in node.children:
+            self.visit(child)
+
+    def visit_NoOp(self, node):
+        pass
+
+    def visit_VarDecl(self, node):
+        type_name = node.type_node.value
+        type_symbol = self.symtab.lookup(type_name)
+        var_name = node.var_node.value
+        var_symbol = VarSymbol(var_name, type_symbol)
+        self.symtab.define(var_symbol)
+
+def print_variables(global_scope):
+    for var, value in global_scope.items():
+        print(f"{var} = {value}")
+
 def main():
-    while True:
-        try:
-            try:
-                text = raw_input('spi> ')
-            except NameError:
-                text = input('spi> ')
-        except EOFError:
-            break
-        if not text:
-            continue
-        lexer = Lexer(text)
-        parser = Parser(lexer)
-        interpreter = Interpreter(parser)
-        result = interpreter.interpret()
-        print(result)
-        # Add this line to show all variables after execution
-        print(interpreter.GLOBAL_SCOPE)
+    import sys
+    text = open(sys.argv[1], 'r').read()
+
+    lexer = Lexer(text)
+    parser = Parser(lexer)
+    tree = parser.parse()
+    symtab_builder = SymbolTableBuilder()
+    symtab_builder.visit(tree)
+    print('')
+    print('Symbol Table contents:')
+    print(symtab_builder.symtab)
+
+    interpreter = Interpreter(tree)  # Pass tree instead of parser
+    result = interpreter.interpret()
+
+    print('')
+    print('Run-time GLOBAL_MEMORY contents:')
+    for k, v in sorted(interpreter.GLOBAL_SCOPE.items()):
+        print('{} = {}'.format(k, v))
 
 if __name__ == '__main__':
     main()
