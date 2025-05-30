@@ -3,7 +3,7 @@ from collections import OrderedDict
 #
 #EOF (end-of-file) token is used to indicate that
 #there is no more input left for lexical analysis
-INTEGER, REAL, INTEGER_CONST, REAL_CONST, PLUS, MINUS, MUL, INTEGER_DIV, FLOAT_DIV, LPAREN, RPAREN, ID, ASSIGN, BEGIN, END, SEMI, DOT, PROGRAM, VAR, COLON, COMMA, EOF = ( 'INTEGER', 'REAL', 'INTEGER_CONST', 'REAL_CONST', 'PLUS', 'MINUS', 'MUL', 'INTEGER_DIV', 'FLOAT_DIV', 'LPAREN', 'RPAREN', 'ID', 'ASSIGN', 'BEGIN', 'END', 'SEMI', 'DOT', 'PROGRAM', 'VAR', 'COLON', 'COMMA', 'EOF' )
+INTEGER, REAL, INTEGER_CONST, REAL_CONST, PLUS, MINUS, MUL, INTEGER_DIV, FLOAT_DIV, LPAREN, RPAREN, ID, ASSIGN, BEGIN, END, SEMI, DOT, PROGRAM, VAR, COLON, COMMA, EOF, PROCEDURE = ( 'INTEGER', 'REAL', 'INTEGER_CONST', 'REAL_CONST', 'PLUS', 'MINUS', 'MUL', 'INTEGER_DIV', 'FLOAT_DIV', 'LPAREN', 'RPAREN', 'ID', 'ASSIGN', 'BEGIN', 'END', 'SEMI', 'DOT', 'PROGRAM', 'VAR', 'COLON', 'COMMA', 'EOF', 'PROCEDURE')
 
 class Token(object):
     def __init__(self, type, value):
@@ -91,6 +91,7 @@ class Lexer(object):
         'REAL' : Token('REAL', 'REAL'),
         'BEGIN' : Token('BEGIN', 'BEGIN'),
         'END' : Token('END', 'END'),
+        'PROCEDURE' : Token('PROCEDURE', 'PROCEDURE'),
     }
 
     def _id(self):
@@ -305,6 +306,7 @@ class Parser(object):
 
     def declarations(self):
         """ declarations : VAR (variable_declaration SEMI)+
+            | (PROCEDURE ID SEMI block SEMI)*
             | empty
         """
         declarations = []
@@ -314,6 +316,16 @@ class Parser(object):
                 var_decl = self.variable_declaration()
                 declarations.extend(var_decl)
                 self.eat(SEMI)
+
+        while self.current_token.type == PROCEDURE:
+            self.eat(PROCEDURE)
+            proc_name = self.current_token.value
+            self.eat(ID)
+            self.eat(SEMI)
+            block_node = self.block()
+            proc_decl = ProcedureDecl(proc_name, block_node)
+            declarations.append(proc_decl)
+            self.eat(SEMI)
 
         return declarations
 
@@ -557,6 +569,9 @@ class Interpreter(NodeVisitor):
         elif node.op.type == FLOAT_DIV:
             return float (self.visit(node.left)) / float(self.visit(node.right))
 
+    def visit_ProcedureDecl(self, node):
+        pass
+
     def visit_Num(self, node):
         return node.value
 
@@ -703,6 +718,8 @@ class SymbolTableBuilder(NodeVisitor):
         self.visit(node.left)
         self.visit(node.right)
 
+    def visit_ProcedureDecl(self, node):
+        pass
 
     def visit_Var(self, node):
         var_name = node.value
@@ -742,6 +759,11 @@ class SymbolTableBuilder(NodeVisitor):
         var_name = node.var_node.value
         var_symbol = VarSymbol(var_name, type_symbol)
         self.symtab.define(var_symbol)
+
+class ProcedureDecl(AST):
+    def __init__(self, proc_name, block_node):
+        self.proc_name = proc_name
+        self.block_node = block_node
 
 def print_variables(global_scope):
     for var, value in global_scope.items():

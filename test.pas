@@ -1,12 +1,23 @@
-PROGRAM Part11;
+PROGRAM P12;
 VAR
-   number : INTEGER;
-   a, b   : INTEGER;
-   y      : REAL;
+   a : INTEGER;
 
-BEGIN {Part11}
-   number := 2;
-   a := number ;
-   b := 10 * a + 10 * number DIV 4;
-   y := 20 / 7 + 3.14
-END.  {Part11}
+PROCEDURE Proc1;
+VAR
+   a : REAL;
+   k : INTEGER;
+
+   PROCEDURE NestedProc1;
+   VAR
+      a, z : INTEGER;
+   BEGIN {NestedProc1;}
+      z := 888;
+   END;  {NestedProc1;}
+
+BEGIN {Proc1}
+
+END;  {Proc1}
+
+BEGIN {P12}
+   a := 10;
+END.  {P12}
